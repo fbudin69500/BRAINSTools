@@ -437,6 +437,7 @@ AtlasRegistrationMethod<TOutputPixel, TProbabilityPixel>
     const int numbOfImagesPerModality = mapOfRegisteredModalImageListsIt->second.size();
     if( numbOfImagesPerModality > 1 )
       {
+      muLogMacro(<< "Average Images" << std::endl);
       //
       this->m_ModalityAveragedOfIntraSubjectImages.push_back(
         AverageImageList<InternalImageType>(mapOfRegisteredModalImageListsIt->second)
@@ -444,13 +445,22 @@ AtlasRegistrationMethod<TOutputPixel, TProbabilityPixel>
       }
     else
       {
+      muLogMacro(<< "Only one scan in this modality" << std::endl);
       FloatImageVector::iterator intraImIt = this->m_RegisteredIntraSubjectImagesList[mapOfRegisteredModalImageListsIt->first].begin(); // each intra subject image
       this->m_ModalityAveragedOfIntraSubjectImages.push_back( (*intraImIt).GetPointer() );
       }
     }
+  muLogMacro(<< "DONE: Average co-registered Intra subject images" << std::endl);
 
   m_KeyAveragedSubjectImage = this->m_ModalityAveragedOfIntraSubjectImages[0];
-  m_SecondKeyAveragedSubjectImage = this->m_ModalityAveragedOfIntraSubjectImages[1];
+  if( this->m_ModalityAveragedOfIntraSubjectImages.size() > 1)
+    {
+    m_SecondKeyAveragedSubjectImage = this->m_ModalityAveragedOfIntraSubjectImages[1];
+    }
+  else
+    {
+    m_SecondKeyAveragedSubjectImage =NULL;
+    }
 }
 
 template <class TOutputPixel, class TProbabilityPixel>
@@ -552,11 +562,12 @@ AtlasRegistrationMethod<TOutputPixel, TProbabilityPixel>
     typedef itk::CompositeTransform<double, 3>                   CompositeTransformType;
     CompositeTransformType::Pointer atlasToSubjectCompositeTransform =
       dynamic_cast<CompositeTransformType *>( m_AtlasToSubjectTransform.GetPointer() );
-    if( atlasToSubjectCompositeTransform.IsNull() )
-      {
-      atlasToSubjectCompositeTransform = CompositeTransformType::New();
-      atlasToSubjectCompositeTransform->AddTransform( m_AtlasToSubjectTransform );
-      }
+    //if( atlasToSubjectCompositeTransform.IsNull() )
+    //  {
+    //   muLogMacro( << "atlasToSubjectCompositeTransform Is Null. Assign to a new Composite." <<   std::endl );
+    //  atlasToSubjectCompositeTransform = CompositeTransformType::New();
+    //  atlasToSubjectCompositeTransform->AddTransform( m_AtlasToSubjectTransform );
+    //  }
     atlasToSubjectRegistrationHelper->SetCurrentGenericTransform( atlasToSubjectCompositeTransform );
 
     // Register all atlas images to first image
@@ -712,6 +723,8 @@ AtlasRegistrationMethod<TOutputPixel, TProbabilityPixel>
         }
       else if( atlasToSubjectInitialTransformName != "SyN"  && atlasToSubjectInitialTransformName != "CompositeTransform" )
         {
+        muLogMacro(<< "atlasToSubjectInitialTransformName: "
+                   << atlasToSubjectInitialTransformName << std::endl);
         itkExceptionMacro( << "ERROR: Invalid atlasToSubjectInitialTransformName"
                            << " type for m_AtlasLinearTransformChoice of type SyN" );
         }
@@ -734,7 +747,7 @@ AtlasRegistrationMethod<TOutputPixel, TProbabilityPixel>
       {
       muLogMacro( << "PRE_ASSIGNMENT 0 " );
       // << transformType[0] << " first of " << transformType.size() << std::endl );
-      muLogMacro(<< __FILE__ << " " << __LINE__ << " "
+      muLogMacro(<< __FILE__ << " " << __LINE__ <<
                  << m_AtlasToSubjectTransform->GetFixedParameters() <<   std::endl );
       muLogMacro(<< __FILE__ << " " << __LINE__ << " "
                  << m_AtlasToSubjectTransform->GetParameters() <<   std::endl );
