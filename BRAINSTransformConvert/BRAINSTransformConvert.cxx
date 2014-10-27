@@ -25,6 +25,8 @@
 #include "itkImageRegionIterator.h"
 #include "GenericTransformImage.h"
 #include "itkTranslationTransform.h"
+#include "itkCompositeTransform.h"
+#include "itkDisplacementFieldTransform.h"
 
 //
 // transform ranking,
@@ -241,11 +243,15 @@ DoConversion( int argc, char *argv[] )
   typename TransformFileReaderType::TransformListType *transformList = reader->GetTransformList();
   typename GenericTransformType::Pointer inputXfrm = dynamic_cast<GenericTransformType *>( transformList->front().GetPointer() );
 
-  std::cout << "------------------------ " << std::endl;
-  std::cout << "Input Transform Type Saved on Memory ==> " << inputXfrm->GetTransformTypeAsString() << std::endl;
-  std::cout << "* Input transform parameters: " << inputXfrm->GetParameters() << std::endl;
-  std::cout << "* Input transform fixed parameters: " << inputXfrm->GetFixedParameters() << std::endl;
-  std::cout << "------------------------ " << std::endl;
+  const std::string inputTransformType = inputXfrm->GetTransformTypeAsString();
+  if( inputTransformType != "CompositeTransform" )
+    {
+    std::cout << "------------------------ " << std::endl;
+    std::cout << "Input Transform Type Saved on Memory ==> " << inputTransformType << std::endl;
+    std::cout << "* Input transform parameters: " << inputXfrm->GetParameters() << std::endl;
+    std::cout << "* Input transform fixed parameters: " << inputXfrm->GetFixedParameters() << std::endl;
+    std::cout << "------------------------ " << std::endl;
+    }
 
   // Handle BSpline type
   typename BSplineTransformType::Pointer bsplineInputXfrm =
@@ -310,6 +316,58 @@ DoConversion( int argc, char *argv[] )
       return EXIT_FAILURE;
       }
     return EXIT_SUCCESS;
+    }
+
+  if( inputTransformType == "CompositeTransform" )
+    {
+    if( outputTransformType == "Same" )
+      {
+      typedef itk::CompositeTransform<TScalarType,3>            CompositeTransformType;
+      typedef itk::DisplacementFieldTransform<TScalarType, 3>   DisplacementFieldTransformType;
+
+      typename CompositeTransformType::Pointer compToWrite;
+      typename CompositeTransformType::Pointer inverseCompToWrite;
+
+      typename CompositeTransformType::ConstPointer compXfrm =
+        dynamic_cast<const CompositeTransformType *>( inputXfrm.GetPointer() );
+      if( compXfrm.IsNotNull() )
+        {
+        compToWrite = compXfrm->Clone();
+        inverseCompToWrite = compXfrm->Clone();
+
+        // If the last two transforms are displacementFieldType, we assume that they are
+        // forward and inverse displacement fields of a SyN transform, so we compose them
+        // into one displacementFieldTransformType.
+        unsigned int numOfTransforms = compToWrite->GetNumberOfTransforms();
+        if( (compToWrite->GetNthTransform( numOfTransforms-1 )->GetTransformCategory() == GenericTransformType::DisplacementField)
+           && (compToWrite->GetNthTransform( numOfTransforms-2 )->GetTransformCategory() == GenericTransformType::DisplacementField) )
+          {
+          compToWrite->RemoveTransform(); // forward composite transform
+
+          typename DisplacementFieldTransformType::Pointer inverseDispTransform =
+            dynamic_cast<DisplacementFieldTransformType *>( inverseCompToWrite->GetNthTransform( numOfTransforms-1 ).GetPointer() );
+
+          inverseCompToWrite->RemoveTransform();
+          inverseCompToWrite->RemoveTransform();
+          inverseCompToWrite->AddTransform( inverseDispTransform.GetPointer() ); // inverse composite transform
+
+          std::string forwardTransfromName = outputTransform + "Composite.h5";
+          std::string inverseTransfromName = outputTransform + "InverseComposite.h5";
+
+          itk::WriteTransformToDisk<TScalarType>( compToWrite.GetPointer(), forwardTransfromName );
+          itk::WriteTransformToDisk<TScalarType>( inverseCompToWrite.GetPointer(), inverseTransfromName );
+          }
+        }
+      else
+        {
+        return EXIT_FAILURE;
+        }
+      }
+    else
+      {
+      std::cerr << "Input transform is a CompositeTransform! Output transform must be the \"Same\" type!" << std::endl;
+      return EXIT_FAILURE;
+      }
     }
 
   //
